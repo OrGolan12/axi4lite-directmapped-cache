@@ -6,6 +6,9 @@ SystemVerilog design of a parameterizable direct-mapped CPU cache with full AXI4
 ## Overview
 This project implements a **Direct-Mapped Cache** that connects a CPU to memory through the **AXI4-Lite** protocol. It reduces memory access latency by storing frequently used data in a fast, small memory structure. The design is modular, synthesizable, and comes with a testbench for functional verification.
 
+## Block Diagram
+<img width="894" height="549" alt="image" src="https://github.com/user-attachments/assets/65ffc77d-8f9e-4366-bf02-56951bc45166" />
+
 ## Features
 - Fully parameterizable cache size and block size.
 - AXI4-Lite compliant read and write channels.
