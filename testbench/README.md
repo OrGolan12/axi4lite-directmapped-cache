@@ -1,5 +1,5 @@
 
-# core_translator_tb Waveform Explanation
+# core_translator_tb_aw_ar_wdata Waveform Explanation
 
 This waveform shows the **AW → AR → W** ordering scenario with the CPU not ready to accept responses immediately.  
 It tests that:
