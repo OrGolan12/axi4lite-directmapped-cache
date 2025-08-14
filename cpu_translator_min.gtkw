@@ -1,0 +1,47 @@
+[*] GTKWave Analyzer Save File
+[dumpfile] "waves.vcd"
+[savefile] "cpu_translator_min.gtkw"
+[timestart] 0
+[statedisplay] primary
+[sst_width] 250
+[signals_width] 270
+[sst_expanded] 1
+[treeopen] core_translator_tb
+[treeopen] core_translator_tb.dut
+[signals]
+# ==== Clock & Reset ====
+core_translator_tb.clk
+core_translator_tb.rst_n
+
+# ==== Write Address/Data Handshakes (CPU -> DUT) ====
+core_translator_tb.s_awvalid
+core_translator_tb.s_awready
+core_translator_tb.s_awaddr[31:0]
+core_translator_tb.s_wvalid
+core_translator_tb.s_wready
+core_translator_tb.s_wdata[31:0]
+core_translator_tb.s_wstrb[3:0]
+
+# ==== Core Issue (DUT -> Core) ====
+core_translator_tb.core_req_valid
+core_translator_tb.core_req_ready
+core_translator_tb.core_req_we
+core_translator_tb.core_req_addr[31:0]
+core_translator_tb.core_req_wdata[31:0]
+core_translator_tb.core_req_wstrb[3:0]
+
+# ==== Core Completion + B-channel (DUT -> CPU) ====
+core_translator_tb.core_resp_valid
+core_translator_tb.core_resp_is_write
+core_translator_tb.core_resp_resp[1:0]
+core_translator_tb.s_bvalid
+core_translator_tb.s_bready
+core_translator_tb.s_bresp[1:0]
+
+# ==== Debug FSM (DUT) ====
+core_translator_tb.dbg_w_state[2:0]
+
+# ==== Helpful internal captures (inside DUT) ====
+core_translator_tb.dut.w_awaddr_q[31:0]
+core_translator_tb.dut.w_wdata_q[31:0]
+core_translator_tb.dut.w_wstrb_q[3:0]

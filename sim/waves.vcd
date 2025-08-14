@@ -1,0 +1,134 @@
+$date
+	Sun Aug 10 15:29:31 2025
+$end
+$version
+	Icarus Verilog
+$end
+$timescale
+	1ps
+$end
+$scope module tb $end
+$var wire 1 ! r_valid $end
+$var wire 2 " r_resp [1:0] $end
+$var wire 32 # r_data [31:0] $end
+$var wire 1 $ ar_ready $end
+$var reg 32 % ar_addr [31:0] $end
+$var reg 1 & ar_valid $end
+$var reg 1 ' clk $end
+$var reg 1 ( r_ready $end
+$var reg 1 ) rst $end
+$scope module dut $end
+$var wire 1 ' clk $end
+$var wire 32 * cpu_ar_addr [31:0] $end
+$var wire 1 & cpu_ar_valid $end
+$var wire 1 ( cpu_r_ready $end
+$var wire 1 ) rst $end
+$var parameter 32 + ADDR_W $end
+$var parameter 32 , DATA_W $end
+$var reg 1 $ cpu_ar_ready $end
+$var reg 32 - cpu_r_data [31:0] $end
+$var reg 2 . cpu_r_resp [1:0] $end
+$var reg 1 ! cpu_r_valid $end
+$var reg 1 / pending $end
+$upscope $end
+$upscope $end
+$enddefinitions $end
+$comment Show the parameter values. $end
+$dumpall
+b100000 ,
+b100000 +
+$end
+#0
+$dumpvars
+x/
+bx .
+bx -
+b0 *
+1)
+0(
+0'
+0&
+b0 %
+x$
+bx #
+bx "
+x!
+$end
+#5000
+0/
+b0 #
+b0 -
+b0 "
+b0 .
+0!
+0$
+1'
+#10000
+0'
+#15000
+1'
+#20000
+0'
+#25000
+1'
+#30000
+0'
+#35000
+1'
+#40000
+0'
+#45000
+0)
+1'
+#50000
+0'
+#55000
+1&
+b1000000 %
+b1000000 *
+1'
+#60000
+0'
+#65000
+1$
+1(
+0&
+1'
+#70000
+0'
+#75000
+0$
+1'
+#80000
+0'
+#85000
+1'
+#90000
+0'
+#95000
+1'
+#100000
+0'
+#105000
+0(
+1'
+#110000
+0'
+#115000
+1'
+#120000
+0'
+#125000
+1'
+#130000
+0'
+#135000
+1'
+#140000
+0'
+#145000
+1'
+#150000
+0'
+#155000
+1'

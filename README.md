@@ -1,42 +1,42 @@
-# AXI4-Lite Direct-Mapped Cache
-
-## Description
-SystemVerilog design of a parameterizable direct-mapped CPU cache with full AXI4-Lite read/write channel support, tag and valid-bit management, automatic hit/miss handling, and a verification testbench to measure AMAT improvements.
+# Verilog Cache Project
 
 ## Overview
-This project implements a **Direct-Mapped Cache** that connects a CPU to memory through the **AXI4-Lite** protocol. It reduces memory access latency by storing frequently used data in a fast, small memory structure. The design is modular, synthesizable, and comes with a testbench for functional verification.
+This project implements a cache memory system in Verilog. It includes the cache memory module, a cache controller, and a testbench for verification. The design aims to enhance data access speed by storing frequently accessed data in a faster storage layer.
 
-## Block Diagram
-<img width="895" height="665" alt="image" src="https://github.com/user-attachments/assets/a3348a31-0975-47ff-bb26-afb631e539a7" />
-
+## Project Structure
+```
+verilog-cache-project
+├── src
+│   ├── cache.v                # Cache memory module implementation
+│   ├── cache_controller.v      # Cache controller logic
+│   └── defines.vh             # Parameter definitions and constants
+├── testbench
+│   └── cache_tb.v             # Testbench for cache module
+├── docs
+│   └── README.md              # Documentation for the project
+└── README.md                  # General overview and setup instructions
+```
 
 ## Features
-- Fully parameterizable cache size and block size.
-- AXI4-Lite compliant read and write channels.
-- Tag array with valid-bit checking.
-- Automatic hit/miss detection and data retrieval.
-- Ready-to-run testbench for simulation.
-- AMAT performance measurement.
+- Cache memory implementation with configurable parameters.
+- Cache controller that manages hits and misses.
+- Testbench to verify the functionality of the cache system.
 
-## Inputs & Outputs
-### CPU Side
-| Name         | Bits | Dir | Description                 |
-|--------------|------|-----|-----------------------------|
-| cpu_ar_addr  | 32   | In  | Read address from CPU        |
-| cpu_ar_valid | 1    | In  | Valid read address signal    |
-| cpu_ar_ready | 1    | Out | Cache ready for read address |
-| cpu_r_data   | 32   | Out | Data back to CPU             |
-| cpu_r_resp   | 2    | Out | Read response                |
-| cpu_r_valid  | 1    | Out | Data valid signal            |
-| cpu_r_ready  | 1    | In  | CPU ready to accept data     |
+## Setup Instructions
+1. Clone the repository to your local machine.
+2. Navigate to the project directory.
+3. Ensure you have a Verilog simulator installed.
+4. Compile the source files and run the testbench to verify the implementation.
 
-### Memory Side
-| Name         | Bits | Dir | Description                          |
-|--------------|------|-----|--------------------------------------|
-| axi_araddr   | 32   | Out | Read address to memory               |
-| axi_arvalid  | 1    | Out | Valid read address signal            |
-| axi_arready  | 1    | In  | Memory ready signal                  |
-| axi_rdata    | 32   | In  | Data from memory                     |
-| axi_rresp    | 2    | In  | Read response from memory            |
-| axi_rvalid   | 1    | In  | Data valid signal from memory        |
-| axi_rready   | 1    | Out | Cache ready to accept memory data    |
+## Running Simulations
+To run the simulations, use the following command in your terminal:
+```
+<simulator_command> testbench/cache_tb.v
+```
+Replace `<simulator_command>` with the command specific to your Verilog simulator.
+
+## Design Considerations
+- The cache size and block size can be configured in `defines.vh`.
+- Ensure that the testbench covers all possible scenarios for thorough verification.
+
+For more detailed documentation, please refer to the `docs/README.md` file.
