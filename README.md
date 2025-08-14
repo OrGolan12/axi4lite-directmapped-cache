@@ -1,5 +1,8 @@
 # Verilog Cache Project
 
+<img width="895" height="665" alt="image" src="https://github.com/user-attachments/assets/d7b5b8a2-f92e-4867-854f-ca71cf72f92b" />
+
+
 ## Overview
 This project implements a cache memory system in Verilog. It includes the cache memory module, a cache controller, and a testbench for verification. The design aims to enhance data access speed by storing frequently accessed data in a faster storage layer.
 
