@@ -1,75 +1,51 @@
-# core_translator_tb Waveform Explanation
+# core_translator_tb – Waveform Notes
 
-This waveform shows the **AW → AR → W** ordering scenario with the CPU not ready to accept responses immediately.  
-It tests that:
-- Reads can bypass an incomplete write (AW received but W not yet sent).
-- The DUT holds R/B channel valid until the CPU asserts ready.
+The waveform below shows the AW → AR → W ordering case with the CPU not ready to take responses right away.  
+This scenario checks two main things:
 
----
-
-<img width="1709" height="577" alt="image" src="https://github.com/user-attachments/assets/63d84e05-3bc7-47fb-842f-52cc843a925b" />
-
+- A read request can bypass a pending write if only the write address (AW) has been received.
+- The design holds R/B channel valid until the CPU side asserts ready.
 
 ---
 
-## Timeline
+<img width="1707" height="567" alt="image" src="https://github.com/user-attachments/assets/b0b7b234-4185-4ac7-9979-9f567e2fde88" />
 
-### 0) Reset & Idle
-- `rst_n` starts low, then goes high after 5 cycles.
-- All signals are 0 or X.
-- `core_req_ready = 1` → core always ready to accept requests.
 
 ---
 
-### 1) Write Address (AW)
-- At **T=5 cycles**, `s_awaddr = 0x00000000`, `s_awvalid = 1`.
-- `s_awready = 1` → handshake occurs in the same cycle.
-- Write FSM (`dbg_w_state`) moves from **IDLE** to **HAVE_AW**.
-- No data yet, so write is not issued to core.
+## Sequence
+
+**Reset**  
+`rst_n` is low for the first few cycles, then released. Core is always ready (`core_req_ready = 1`).
+
+**1. Write address (AW)**  
+At ~T+5 cycles, `s_awaddr = 0x00000000` and `s_awvalid` goes high for one cycle.  
+With `s_awready = 1`, the handshake completes immediately. The write FSM moves to HAVE_AW, waiting for the write data.
+
+**2. Read address (AR)**  
+A few cycles later, `s_araddr = 0x00000010` and `s_arvalid` go high.  
+The handshake with `s_arready = 1` triggers a core read request (`core_req_valid = 1`, `we = 0`).  
+The core accepts it in the same cycle.
+
+**3. Write data (W)**  
+`s_wdata = 0xDEADBEEF`, `s_wstrb = 0xF`, `s_wvalid = 1`.  
+With `s_wready = 1`, the DUT now has both AW and W and issues the write to the core (`we = 1`).
+
+**4. Core read response**  
+Core responds with `core_resp_rdata = 0x12345678`, `resp = OKAY`.  
+DUT drives `s_rvalid = 1`, `s_rdata = 0x12345678`.  
+Since `s_rready = 0`, R channel stays valid until the CPU takes it.
+
+**5. Core write response**  
+Later, core responds to the write (`core_resp_is_write = 1`, `resp = OKAY`).  
+DUT drives `s_bvalid = 1`, `s_bresp = 00`.  
+With `s_bready = 0`, B channel remains valid until the handshake.
 
 ---
 
-### 2) Read Address (AR)
-- Later, `s_araddr = 0x00000010`, `s_arvalid = 1`.
-- Handshakes immediately with `s_arready = 1`.
-- Read FSM (`dbg_r_state`) goes **IDLE → ISSUE**.
-- DUT sends core request:
-  - `core_req_valid = 1`, `core_req_we = 0` (read).
-  - `core_req_addr = 0x00000010`.
-- Core accepts instantly (`core_req_ready = 1`).
-
----
-
-### 3) Write Data (W)
-- `s_wdata = 0xDEADBEEF`, `s_wstrb = 0xF`, `s_wvalid = 1`.
-- Handshake with `s_wready = 1` → DUT now has AW + W.
-- Write request issued to core:
-  - `core_req_valid = 1`, `core_req_we = 1` (write).
-  - `core_req_addr = 0x00000000`, `core_req_wdata = 0xDEADBEEF`.
-
----
-
-### 4) Core Read Response
-- Core sends `core_resp_valid = 1`, `core_resp_is_write = 0`.
-- Data: `core_resp_rdata = 0x12345678`, `core_resp_resp = 00` (OKAY).
-- DUT drives R channel to CPU:
-  - `s_rvalid = 1`, `s_rdata = 0x12345678`, `s_rresp = 00`.
-- Since `s_rready = 0`, DUT holds data valid (sticky response).
-
----
-
-### 5) Core Write Response
-- Later, core sends `core_resp_valid = 1`, `core_resp_is_write = 1`.
-- `core_resp_resp = 00` (OKAY).
-- DUT drives B channel:
-  - `s_bvalid = 1`, `s_bresp = 00`.
-- Since `s_bready = 0`, DUT holds B channel valid until handshake.
-
----
-
-## Key Points Verified
-- Read can bypass incomplete write (AW before W).
-- DUT holds `s_rvalid` and `s_bvalid` until handshake when CPU not ready.
-- FSMs (`dbg_r_state`, `dbg_w_state`) reflect correct transitions:
-  - **Read**: IDLE → ISSUE → WAIT_RESP → IDLE
-  - **Write**: IDLE → HAVE_AW → ISSUE → WAIT_B → IDLE
+**Verified in this run:**
+- Read can bypass incomplete write (AW without W).
+- R and B channels hold valid when CPU isn’t ready.
+- FSMs transition as expected:
+  - Read: IDLE → ISSUE → WAIT_RESP → IDLE
+  - Write: IDLE → HAVE_AW → ISSUE → WAIT_B → IDLE
