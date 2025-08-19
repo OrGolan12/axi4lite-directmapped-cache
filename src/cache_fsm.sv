@@ -1,8 +1,8 @@
 module cache_fsm #(
     parameter int ADDR_WIDTH = 32,
     parameter int DATA_WIDTH = 32,
-    parameter int LINE_BYTES   = 16;        // bytes per line (e.g., 16B = 4 words)
-    parameter int NUM_LINES    = 32;        // number of lines (power of 2)
+    parameter int LINE_BYTES   = 16,        // bytes per line (e.g., 16B = 4 words)
+    parameter int NUM_LINES    = 32        // number of lines (power of 2)
 )(  // ================ Simple Cache-Core Internal Interface ================
     input logic clk,
     input logic rst_n,
@@ -18,13 +18,12 @@ module cache_fsm #(
     output logic [1:0] core_resp_resp,
     // ================ Data path Signals ================
     input logic req_tag_cmp_resp, // 0 = miss, 1 = hit
-    input logic req_tag_cmp_valid, 
+    input logic req_tag_cmp_valid,
     output logic req_tag_cmp
     );
 
 
 
-    
   // -------- Derived constants --------
 localparam int OFFSET_BITS   = $clog2(LINE_BYTES);
 localparam int INDEX_BITS    = $clog2(NUM_LINES);
@@ -52,39 +51,37 @@ always_ff @(posedge clk or negedge rst_n) begin
 end
 
 assign req_tag_cmp = (current == LOOKUP) && (prev != LOOKUP);
-assign cmp_idx = (current == LOOKUP) && (prev != LOOKUP) ? core_req_addr[OFFSET_BITS-1 : INDEX_BITS] : 1'b0;
-assign cmp_tag = (current == LOOKUP) && (prev != LOOKUP) ? core_req_addr[ADDR_WIDTH-1 : OFFSET_BITS + INDEX_BITS] : 1'b0;
 
 always_comb begin
     next = current;
     unique case (current)
-        IDLE: if (core_req_valid) next = LOOKUP 
+        IDLE: if (core_req_valid) next = LOOKUP;
         LOOKUP: begin
             if (hit) begin
                 if (!core_req_we) next = IDLE;
                 if (core_req_we && written_to_cache) next = IDLE;
-            end 
+            end
             else if (hit == 0) begin
                 if (core_req_we == 0) next = REFILL;
                 else next = EVICT;
-            end 
+            end
             if (core_resp_valid == 1 && dirty == 0) next = IDLE;
             else if (dirty == 1) next = EVICT;
             else next = LOOKUP;
-        end 
+        end
 
         EVICT: begin
             if (evicted == 1) next = REFILL;
             else next = EVICT;
-        end 
+        end
 
         REFILL: begin
             if (refilled == 1) next = IDLE;
             else next = REFILL;
         end
-    endcase 
+    endcase
 
-end 
+end
 
 
 

@@ -1,8 +1,8 @@
 module cache_dp #(
     parameter int ADDR_WIDTH = 32,
     parameter int DATA_WIDTH = 32,
-    parameter int LINE_BYTES   = 16;        // bytes per line (e.g., 16B = 4 words)
-    parameter int NUM_LINES    = 32;        // number of lines (power of 2)
+    parameter int LINE_BYTES   = 16,        // bytes per line (e.g., 16B = 4 words)
+    parameter int NUM_LINES    = 32        // number of lines (power of 2)
 
 )(  //general signals
     input logic clk,
@@ -38,10 +38,10 @@ module cache_dp #(
     logic                  dirty_array [NUM_LINES];
     logic [DATA_WIDTH-1:0] data_array  [NUM_LINES][WORDS_PER_LINE]; // word-granular is BRAM-friendly   
 
-    assign req_tag_cmp_resp = cmp_tag_req ? ((tag_array[index] == core_req_addr[LINE_BITS-1:OFFSET_BITS+INDEX_BITS]) && valid_array[OFFSET_BITS+INDEX_BITS-1 -: INDEX_BITS]) : 1'b0;
-    
-    
-    
+    assign req_tag_cmp_resp = cmp_tag_req 
+        ? ((tag_array[index] == core_req_addr[ADDR_WIDTH-1 -: TAG_BITS]) 
+            && valid_array[index]) 
+        : 1'b0;
     always_ff @(posedge clk) begin
 
         offset <= core_req_addr[OFFSET_BITS-1:0];
@@ -79,28 +79,24 @@ module cache_dp #(
             dirty_array[index] <= 1;
             written_to_cache <= 1;
         end
-        
         //if (refilled == 1 && )
 
-    end 
+    end
 
     always_comb begin
 
         if (cpu_handshake_complete == 1) begin //handshake, doesnt matter if read or write
-            
             if (core_req_we == 0) begin
                     core_resp_rdata = data_cache[index][offset];
                 end
-
-            
-            if (tag == address_cache[index][31:8] && valid_array[index] == 1) begin //hit     
+            if (tag == address_cache[index][31:8] && valid_array[index] == 1) begin //hit
                 hit = 1;
-                core_resp_valid = 1;     
+                core_resp_valid = 1;
             end
 
             else if (tag != address_cache[index][31:8] || valid_array[index] == 0) begin //miss
                 hit = 0;
-            end 
+            end
         end
     end
 
