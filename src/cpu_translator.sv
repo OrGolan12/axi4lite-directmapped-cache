@@ -1,17 +1,15 @@
-// cpu_translator.sv
-// AXI4-Lite (CPU slave) <-> Simple one-request Core Port
-// - AW/W can arrive in any order (collected independently)
-// - One request in-flight total (no RAW checks beyond same-address gate here)
-// - Response holding (skid) for B and R channels
-// - DEBUG: dbg_w_state[2:0], dbg_r_state[1:0]
+// cpu_translator.sv — AXI4-Lite (CPU) <-> simple core port
+// - AW/W accepted independently; single-beat
+// - One in-flight total; responses held on B/R skid regs
+// - Moore issue (both read and write).
+// - Arbitration: same-address hazard => WRITE wins; else WRITE_OVER_READ decides.
+// - dbg_w_state[2:0], dbg_r_state[1:0] exported for waves
 
 `timescale 1ns/1ps
-
 module cpu_translator #(
   parameter int ADDR_WIDTH      = 32,
   parameter int DATA_WIDTH      = 32,
-  // 1 = write priority when both are ready; 0 = read-first (with RAW override)
-  parameter bit WRITE_OVER_READ = 1'b1
+  parameter bit WRITE_OVER_READ = 1'b1   // 1=write wins when both can issue
 )(
   input  logic                     clk,
   input  logic                     rst_n,
@@ -44,7 +42,7 @@ module cpu_translator #(
   output logic                     s_rvalid,
   input  logic                     s_rready,
 
-  // ================= Simple Core Port (to cache core) =================
+  // ================= Simple Core Port =================
   // Request
   output logic                     core_req_valid,
   input  logic                     core_req_ready,
@@ -59,7 +57,7 @@ module cpu_translator #(
   input  logic [DATA_WIDTH-1:0]    core_resp_rdata,     // valid when is_write=0
   input  logic [1:0]               core_resp_resp,      // response code
 
-  // ================= DEBUG =================
+  // ================= DEBUG (visible in waves) =================
   output logic [2:0]               dbg_w_state,
   output logic [1:0]               dbg_r_state
 );
@@ -67,8 +65,8 @@ module cpu_translator #(
   // -------------------------- Write FSM --------------------------
   typedef enum logic [2:0] {
     W_IDLE    = 3'd0,
-    W_GOT_AW  = 3'd1,
-    W_GOT_W   = 3'd2,
+    W_HAVE_AW = 3'd1,
+    W_HAVE_W  = 3'd2,
     W_ISSUE   = 3'd3,
     W_WAIT_B  = 3'd4
   } w_state_e;
@@ -90,7 +88,7 @@ module cpu_translator #(
 
   logic [ADDR_WIDTH-1:0]   r_araddr_q;
 
-  // ---------------------- Response holding -----------------------
+  // ---------------------- Response holding (skid) ----------------
   // B channel hold
   logic        b_hold_valid;
   logic [1:0]  b_hold_resp;
@@ -100,69 +98,13 @@ module cpu_translator #(
   logic [1:0]  r_hold_resp;
   logic [DATA_WIDTH-1:0] r_hold_data;
 
-  // ----------------------- Busy & pending ------------------------
-  // Busy ONLY while waiting for completion
-  wire core_busy  = (w_state == W_WAIT_B) || (r_state == R_WAIT_R);
-  // Pending when in ISSUE states
-  wire w_req_pend = (w_state == W_ISSUE);
-  wire r_req_pend = (r_state == R_ISSUE);
+  // ----------------------- Handshake helpers ---------------------
+  wire aw_hs = s_awvalid && s_awready;
+  wire w_hs  = s_wvalid  && s_wready;
+  wire ar_hs = s_arvalid && s_arready;
 
-  // ----------------------- RAW hazard gate -----------------------
-  // Write address is known after AW is captured (GOT_AW or later)
-  wire write_addr_valid = (w_state == W_GOT_AW) || (w_state == W_ISSUE) || (w_state == W_WAIT_B);
-  // Read address is known in R_ISSUE
-  wire read_addr_valid  = (r_state == R_ISSUE);
-
-  // Same-byte-address hazard (upgrade to line compare if needed)
-  wire addr_hazard = write_addr_valid && read_addr_valid && (w_awaddr_q == r_araddr_q);
-
-  // ----------------------- Registered grants ---------------------
-  (* keep *) logic grant_w, grant_r;
-
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      grant_w <= 1'b0;
-      grant_r <= 1'b0;
-    end else begin
-      // Clear grant on handshake
-      if (core_req_valid && core_req_ready) begin
-        grant_w <= 1'b0;
-        grant_r <= 1'b0;
-      end
-      // Take new grant only when core is free and no active grant
-      else if (!core_busy && !grant_w && !grant_r) begin
-        unique case (1'b1)
-          // Both want to issue: hazard forces write first; else policy
-          (w_req_pend && r_req_pend): begin
-            if (addr_hazard) begin
-              grant_w <= 1'b1;
-            end else begin
-              if (WRITE_OVER_READ) grant_w <= 1'b1;
-              else                 grant_r <= 1'b1; // read-first
-            end
-          end
-          // Only write pending
-          (w_req_pend): grant_w <= 1'b1;
-          // Only read pending: if hazard exists (write addr captured & same), stall read; else grant read
-          (r_req_pend): begin
-            if (!addr_hazard) grant_r <= 1'b1;
-            // else wait until write can issue when W arrives
-          end
-          default: /* idle */ ;
-        endcase
-      end
-    end
-  end
-
-  // --------------------- Drive core from grant -------------------
-  assign core_req_valid = grant_w | grant_r;
-  assign core_req_we    = grant_w;
-
-  assign core_req_addr  = grant_w ? w_awaddr_q :
-                          grant_r ? r_araddr_q : '0;
-
-  assign core_req_wdata = grant_w ? w_wdata_q  : '0;
-  assign core_req_wstrb = grant_w ? w_wstrb_q  : '0;
+  // One in-flight means "busy" only while waiting for completion
+  wire core_busy = (w_state == W_WAIT_B) || (r_state == R_WAIT_R);
 
   // ----------------------- State & captures ----------------------
   always_ff @(posedge clk or negedge rst_n) begin
@@ -187,14 +129,14 @@ module cpu_translator #(
       r_state <= r_state_n;
 
       // capture AW/W/AR on local handshakes
-      if (s_awready && s_awvalid) begin
+      if (aw_hs) begin
         w_awaddr_q <= s_awaddr;
       end
-      if (s_wready && s_wvalid) begin
+      if (w_hs) begin
         w_wdata_q  <= s_wdata;
         w_wstrb_q  <= s_wstrb;
       end
-      if (s_arready && s_arvalid) begin
+      if (ar_hs) begin
         r_araddr_q <= s_araddr;
       end
 
@@ -217,42 +159,85 @@ module cpu_translator #(
     end
   end
 
-  // --------------------- Write FSM next-state --------------------
+  // --------------------- AXI ready (accept) ----------------------
+  // Accept AW if write path hasn't captured AW yet (IDLE or HAVE_W)
+  assign s_awready = (w_state == W_IDLE) || (w_state == W_HAVE_W);
+  // Accept W  if write path hasn't captured W  yet (IDLE or HAVE_AW)
+  assign s_wready  = (w_state == W_IDLE) || (w_state == W_HAVE_AW);
+  // Accept AR only when read path is idle (no AR queue)
+  assign s_arready = (r_state == R_IDLE);
+
+  // --------------------- Arbitration & drive ---------------------
+  // Moore issue: only assert during *_ISSUE, and only when not busy
+  wire can_issue_w = !core_busy && (w_state == W_ISSUE);
+  wire can_issue_r = !core_busy && (r_state == R_ISSUE);
+
+  // RAW hazard: same full address (replace with line-compare if preferred)
+  wire write_addr_known = (w_state == W_HAVE_AW) || (w_state == W_ISSUE) || (w_state == W_WAIT_B);
+  wire read_addr_known  = (r_state == R_ISSUE);
+  wire same_addr_hazard = write_addr_known && read_addr_known && (w_awaddr_q == r_araddr_q);
+
+  // Selection:
+  // 1) If both can issue and same address -> WRITE wins (prevent stale read)
+  // 2) Else, if both can issue -> policy: WRITE_OVER_READ (here =1, so WRITE wins)
+  // 3) Else, whichever is available.
+  wire both_can = can_issue_w && can_issue_r;
+
+  wire sel_w_now = (both_can && same_addr_hazard) ? 1'b1
+                   : (both_can ? WRITE_OVER_READ
+                               : can_issue_w);
+  wire sel_r_now = (!sel_w_now) && can_issue_r;
+
+  // Payloads: Moore → use captured regs
+  wire [ADDR_WIDTH-1:0]    w_addr_eff  = w_awaddr_q;
+  wire [DATA_WIDTH-1:0]    w_data_eff  = w_wdata_q;
+  wire [DATA_WIDTH/8-1:0]  w_strb_eff  = w_wstrb_q;
+  wire [ADDR_WIDTH-1:0]    r_addr_eff  = r_araddr_q;
+
+  // Drive core
+  assign core_req_valid = sel_w_now || sel_r_now;
+  assign core_req_we    = sel_w_now;
+  assign core_req_addr  = sel_w_now ? w_addr_eff : r_addr_eff;
+  assign core_req_wdata = sel_w_now ? w_data_eff : '0;
+  assign core_req_wstrb = sel_w_now ? w_strb_eff : '0;
+
+  wire core_hs_now = core_req_valid && core_req_ready;
+
+  // --------------------- Next-state logic (single block) ---------
   always_comb begin
+    // defaults
     w_state_n = w_state;
+    r_state_n = r_state;
+
+    // ---------- WRITE FSM ----------
     unique case (w_state)
       W_IDLE: begin
-        // accept either AW or W (independently)
-        if      (s_awvalid && s_awready) w_state_n = W_GOT_AW;
-        else if (s_wvalid  && s_wready ) w_state_n = W_GOT_W;
+        if      (aw_hs && w_hs) w_state_n = W_ISSUE;
+        else if (aw_hs)         w_state_n = W_HAVE_AW;
+        else if (w_hs)          w_state_n = W_HAVE_W;
       end
-      W_GOT_AW: begin
-        if (s_wvalid && s_wready) w_state_n = W_ISSUE;
+      W_HAVE_AW: begin
+        if (w_hs) w_state_n = W_ISSUE;
       end
-      W_GOT_W: begin
-        if (s_awvalid && s_awready) w_state_n = W_ISSUE;
+      W_HAVE_W: begin
+        if (aw_hs) w_state_n = W_ISSUE;
       end
-      // Advance ONLY when THIS write was actually issued
       W_ISSUE: begin
-        if (grant_w && core_req_valid && core_req_ready) w_state_n = W_WAIT_B;
+        if (core_hs_now && sel_w_now) w_state_n = W_WAIT_B;
       end
       W_WAIT_B: begin
         if (core_resp_valid && core_resp_is_write) w_state_n = W_IDLE;
       end
       default: w_state_n = W_IDLE;
     endcase
-  end
 
-  // ---------------------- Read FSM next-state --------------------
-  always_comb begin
-    r_state_n = r_state;
+    // ---------- READ FSM ----------
     unique case (r_state)
       R_IDLE: begin
-        if (s_arvalid && s_arready) r_state_n = R_ISSUE;
+        if (ar_hs) r_state_n = R_ISSUE;
       end
-      // Advance ONLY when THIS read was actually issued
       R_ISSUE: begin
-        if (grant_r && core_req_valid && core_req_ready) r_state_n = R_WAIT_R;
+        if (core_hs_now && sel_r_now) r_state_n = R_WAIT_R;
       end
       R_WAIT_R: begin
         if (core_resp_valid && !core_resp_is_write) r_state_n = R_IDLE;
@@ -260,14 +245,6 @@ module cpu_translator #(
       default: r_state_n = R_IDLE;
     endcase
   end
-
-  // --------------------- AXI ready (accept) ----------------------
-  // Accept AW if write path hasn't captured AW yet (IDLE or GOT_W)
-  assign s_awready = (w_state == W_IDLE) || (w_state == W_GOT_W);
-  // Accept W  if write path hasn't captured W  yet (IDLE or GOT_AW)
-  assign s_wready  = (w_state == W_IDLE) || (w_state == W_GOT_AW);
-  // Accept AR only when read path is idle (no AR queue)
-  assign s_arready = (r_state == R_IDLE);
 
   // --------------------- AXI responses (with holds) --------------
   // B channel
@@ -283,5 +260,19 @@ module cpu_translator #(
   assign dbg_w_state = w_state;
   assign dbg_r_state = r_state;
 
-endmodule
+`ifdef ASSERTIONS
+  // Never drive a new request while a completion is pending
+  assert_no_issue_while_busy:
+    assert property (@(posedge clk) core_req_valid |-> !core_busy);
 
+  // Only one selection at a time
+  assert_one_hot_sel:
+    assert property (@(posedge clk) !(sel_w_now && sel_r_now));
+
+  // If both can issue and same address => must pick write
+  assert_hazard_write_wins:
+    assert property (@(posedge clk)
+      (can_issue_w && can_issue_r && same_addr_hazard) |-> sel_w_now && !sel_r_now);
+`endif
+
+endmodule

@@ -104,7 +104,7 @@ initial begin
   // defaults
   s_awvalid=0; s_wvalid=0; s_arvalid=0;
   s_bready=0;  s_rready=0;
-  core_req_ready=0;
+  core_req_ready=1;
   core_resp_valid=0; core_resp_is_write=0; core_resp_resp=2'b00;
 
   @(posedge rst_n);
@@ -112,41 +112,38 @@ initial begin
 
   // === T=5: AW for 1 cycle ===
   repeat (5) @(posedge clk);
-  s_awaddr  = 32'h0000_0010;
+  s_awaddr  = 32'h0000_0000;
   s_awvalid = 1;
   @(posedge clk);
   s_awvalid = 0;
-
-  // === T=10: W for 1 cycle ===
-  repeat (4) @(posedge clk);
-  s_wdata   = 32'hDEAD_BEEF;
-  s_wstrb   = 4'hF;
-  s_wvalid  = 1;
   @(posedge clk);
-  s_wvalid  = 0;
-
-  // === Wait until DUT is truly in W_ISSUE (dbg_w_state==3'b011) ===
-  wait (dbg_w_state == 3'b011);
-  // give one cycle for the registered grant to set (conservative but safe)
+  @(posedge clk);
+  s_araddr  = 32'h0000_0010;
+  s_arvalid = 1;
+  @(posedge clk);
+  s_arvalid = 0;
+  @(posedge clk);
+  @(posedge clk);
+  s_wdata  = 32'hDEADBEEF;
+  s_wstrb  = 4'b1111; // Full write
+  s_wvalid = 1;
+  @(posedge clk);
+  s_wvalid = 0;
+  @(posedge clk);
+  core_resp_rdata = 32'h12345678; // Mock read data
+  core_resp_valid = 1; core_resp_is_write = 0; core_resp_resp = 2'b00;
+  @(posedge clk);
+  core_resp_valid = 0;
+  core_req_ready=1;
+  @(posedge clk);
+  s_wvalid = 0;
+  @(posedge clk);
+  @(posedge clk);
+  core_resp_valid = 1; core_resp_is_write = 1; core_resp_resp = 2'b00;
+  @(posedge clk);
+  core_resp_valid = 0;
   @(posedge clk);
 
-  // === Now pulse core_req_ready for 1 cycle to force the handshake ===
-  core_req_ready = 1;
-  @(posedge clk);
-  core_req_ready = 0;
-
-  // === Complete the write 2 cycles later ===
-  repeat (2) @(posedge clk);
-  core_resp_is_write = 1;
-  core_resp_resp     = 2'b00; // OKAY
-  core_resp_valid    = 1;
-  @(posedge clk);
-  core_resp_valid    = 0;
-
-  // === Let CPU accept B so the skid clears ===
-  s_bready = 1; @(posedge clk); s_bready = 0;
-
-  repeat (5) @(posedge clk);
   $finish;
 end
 
